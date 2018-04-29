@@ -1,0 +1,1602 @@
+---
+title: "POLI 680 LOCAL INEQUALITY"
+author: "Andrew McCormack"
+date: '2018-04-29'
+output: html_document
+---
+
+To replicate my findings, you will need to download the British Election Study panel study and load in the data http://www.britishelectionstudy.com/data-object/british-election-study-combined-wave-1-13-internet-panel/
+
+Due to time constraints and continuing learning experience with R, this code is not nearly as tidy as it could be. Thank you for your understanding. 
+
+PREPARING THE DATA
+__________________
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(echo = TRUE,
+                     root.dir = "/Users/andrewmccormack/Desktop/POLI 680/Paper")
+p_load(readxl, stringr, DescTools, ineq, forcats, labelled, haven, plyr, texreg, tidyverse, gdata, lmtest, gridExtra)
+```
+
+```{r}
+#bes <- read_dta("/Users/andrewmccormack/Desktop/POL 632/POLI 632 Paper/POLI_632_R/BES2017_W13_Panel_v1.2.dta")
+
+### So many variables, so little time, below is a function to create character strings of variable names for quick and painless subsetting <3
+# participation <- grep("participation", names(bes), value=TRUE)
+# paste(as.character(participation), collapse=", ")
+
+bes_1 <- dplyr::select(bes,
+       profile_oslaua,
+       #local_authority,
+       gor,
+       gorW2,
+       gorW3,
+       gorW6,
+       onscode,
+       ##########################
+       ## Kitchen sink controls##
+       ##########################
+       # Income (gross household)
+       profile_gross_household, profile_gross_householdW10, profile_gross_householdW11, 
+       profile_gross_householdW12, profile_gross_householdW13,
+       # Income (gross personal)
+       profile_gross_personal,
+       # Gender
+       gender,
+       # Age
+       Age,
+       # Education
+       edlevelW1_W6, edlevelW7, edlevelW8W9W10, edlevelW11, edlevelW12, edlevelW13,
+       # Left right
+       leftRightW1, leftRightW2, leftRightW3, leftRightW4, leftRightW5, leftRightW6, 
+       leftRightW7, leftRightW8, leftRightW9, leftRightW10, leftRightW11, leftRightW12, leftRightW13,
+       # Participation
+       participation_1W5, participation_2W5, participation_3W5, participation_4W5, participation_5W5, 
+       participation_6W5, participation_1W6, participation_2W6, participation_3W6, participation_4W6, 
+       participation_1W8, participation_2W8, participation_3W8, participation_4W8, participation_5W8, 
+       participation_6W8, participation_1W12, participation_2W12, participation_3W12, participation_4W12, 
+       participation_5W12, participation_6W12, participation_1W13, participation_2W13, participation_3W13, 
+       participation_4W13, participation_5W13,
+       # Attention to politics
+       polAttentionW1, polAttentionW2, polAttentionW3, polAttentionW4, polAttentionW6, polAttentionW7, 
+       polAttentionW8, polAttentionW10, polAttentionW11,
+       polAttentionW13,
+       ###################################
+       ####Satisfaction with democracy####
+       ###################################
+       # UK
+       satDemUKW1, satDemUKW2, satDemUKW3, satDemUKW4, satDemUKW6, satDemUKW7, 
+       satDemUKW8, satDemUKW9, satDemUKW10, satDemUKW11, satDemUKW13,
+       # Scotland
+       satDemScotW1, satDemScotW2, satDemScotW3, satDemScotW4, satDemScotW6, satDemScotW7, 
+       satDemScotW8, satDemScotW9, satDemScotW10, satDemScotW11, satDemScotW13,
+       # Wales 
+       satDemWalesW1, satDemWalesW2, satDemWalesW3, satDemWalesW4, satDemWalesW6, satDemWalesW7, 
+       satDemWalesW8, satDemWalesW9, satDemWalesW10, satDemWalesW11, satDemWalesW13,
+       # England
+       satDemEngW1, satDemEngW2, satDemEngW3, satDemEngW4, satDemEngW6, satDemEngW7, satDemEngW8, 
+       satDemEngW9, satDemEngW10, satDemEngW11, satDemEngW13,
+       # EU
+       satDemEUW1, satDemEUW2, satDemEUW3, satDemEUW4, satDemEUW6, satDemEUW7, satDemEUW8, satDemEUW9, satDemEUW10,
+       ## EU VOTE
+       euRefVoteW1, euRefVoteW2, euRefVoteW3, euRefVoteW4, euRefVoteW6, euRefVoteW7, 
+       euRefVoteW8, euRefVoteW9, euRefVoteW10, euRefVoteW11, euRefVoteW12, euRefVoteW13,
+       ## EXPECT GOOD CONDUCT
+       expectGoodConductEURefW7, expectGoodConductEURefW10, expectGoodConductEURefW11,
+       ## Weights
+       wt_full_W3, wt_full_W1W2W3, wt_full_W4, wt_full_W1W2W3W4, wt_full_W5, wt_full_W1W2W3W4W5, wt_full_W4W5, wt_full_W6, 
+       wt_full_W1W2W3W4W5W6, wt_full_W4W5W6, wt_full_W4W6, wt_full_W7, wt_full_W8, wt_full_W1W2W3W4W5W6W7W8, wt_full_W7W8, 
+       wt_full_W9, wt_full_W1W2W3W4W5W6W7W8W9, wt_full_W7W8W9, wt_full_W10, wt_full_W11, wt_full_W1_W11, wt_full_W1, wt_full_W2, 
+       wt_full_W1W2, wt_full_W1W2W3W4W5W6W7, wt_new_W11, wt_new_W6W7, wt_new_W2W6, wt_new_W2W6W7, wt_new_W9_W13, wt_new_W12, 
+       wt_new_W13, wt_new_W1_W11, wt_new_W1_W12, wt_new_W1_W13, wt_new_W6_W11, wt_new_W6_W12, wt_new_W6_W13, wt_new_W11_W13, wt_new_W10,
+       ## Efficacy Politicians Don't Care What People like Me think
+       efficacyPolCareW1, efficacyPolCareW2, efficacyPolCareW3, efficacyPolCareW4, 
+       efficacyPolCareW6, efficacyPolCareW7, efficacyPolCareW8, efficacyPolCareW9, 
+       efficacyPolCareW10, efficacyPolCareW11,
+       ## Efficacy doesn't matter what party is in power
+       efficacyNoMatterW4, efficacyNoMatterW6, efficacyNoMatterW7, efficacyNoMatterW8, efficacyNoMatterW9, efficacyNoMatterW10, efficacyNoMatterW11,
+       ## Efficacy I have understanding of important issues facing our country
+       efficacyUnderstandW1, efficacyUnderstandW2, efficacyUnderstandW3, efficacyUnderstandW4, 
+       efficacyUnderstandW6, efficacyUnderstandW7, efficacyUnderstandW8, efficacyUnderstandW9, 
+       efficacyUnderstandW10, efficacyUnderstandW11,
+       ## Efficacy I have understanding of important issues facing our country
+       efficacyNotUnderstandW1, efficacyNotUnderstandW2, efficacyNotUnderstandW3, efficacyNotUnderstandW4, 
+       efficacyNotUnderstandW6, efficacyNotUnderstandW7, efficacyNotUnderstandW8, efficacyNotUnderstandW9, 
+       efficacyNotUnderstandW10, efficacyNotUnderstandW11,
+       ## Trust MPs
+       trustMPsW1, trustMPsW2, trustMPsW3, trustMPsW4, trustMPsW6, 
+       trustMPsW7, trustMPsW8, trustMPsW9, trustMPsW10, trustMPsW12,
+       ## Econ egotropic retrospective/prospective
+       econGenRetroW1, econGenProspW1, econGenRetroW2, econGenProspW2, econGenRetroW3, 
+       econGenRetroW4, econGenRetroW6, econGenProspW6, econGenRetroW7, econGenRetroW8, 
+       econGenRetroW10, econGenProspW10, econGenRetroW11, econGenRetroW12, econGenRetroW13,
+       ## Econ socio retrospective
+       econPersonalRetroW1, econPersonalProspW1, econPersonalRetroW2, econPersonalProspW2, 
+       econPersonalRetroW3, econPersonalRetroW4, econPersonalRetroW6, econPersonalProspW6, 
+       econPersonalRetroW7, econPersonalRetroW8, econPersonalRetroW10, econPersonalProspW10, 
+       econPersonalRetroW11, econPersonalRetroW12, econPersonalRetroW13,
+       ## Risk unemployment
+       riskUnemploymentW1, riskUnemploymentW2, riskUnemploymentW3, riskUnemploymentW4, riskUnemploymentW6, 
+       riskUnemploymentW7, riskUnemploymentW8, riskUnemploymentW9, riskUnemploymentW10, riskUnemploymentW11,
+       ## Risk poverty
+       riskPovertyW1, riskPovertyW2, riskPovertyW3, riskPovertyW4, riskPovertyW6, riskPovertyW7, riskPovertyW8,
+       riskPovertyW9, riskPovertyW10, riskPovertyW11,
+       ## Economy getting better
+       changeEconomyW1, changeEconomyW2, changeEconomyW3, changeEconomyW4, changeEconomyW7, 
+       changeEconomyW8, changeEconomyW9, changeEconomyW10, changeEconomyW11, changeEconomyW12,
+       ## 
+       immigCulturalW1, immigCulturalW2, immigCulturalW3, immigCulturalW4, immigCulturalW7, 
+       immigCulturalW8, immigCulturalW10, immigCulturalW11, immigCulturalW13,
+       ##
+       immigEconW1, immigEconW2, immigEconW3, immigEconW4, immigEconW7, immigEconW8, immigEconW10, immigEconW11, immigEconW13,
+       ## EU Conduct
+       expectGoodConductEURefW7, expectGoodConductEURefW10, expectGoodConductEURefW11, goodConductEURefW9
+       )
+
+bes_1$local_authority <- as.character(as_factor(bes$profile_oslaua))
+```
+
+Here, I take the mean of all education answers across waves. If the value is greater than or equal to 4 (undergraduate), the dummy takes on a value of one. If it is lower, I code as zero.
+
+```{r}
+education <- bes_1 %>% 
+  dplyr::select(starts_with("edlevel")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate(education = rowMeans(., na.rm = T)) %>%
+  dplyr::select(education)
+
+bes_1$education_continuous <- as.vector(as.matrix(education))
+bes_1$education <- ifelse(bes_1$education_continuous >= 4, 1, 0)
+
+bes_1$education_continuous
+```
+
+# Occupation variables
+
+Here I compute a number of variables
+
+## Risk of unemployment
+Risk of unemployment takes the mean value of this variable across waves and ranges from 1 (no risk) to 5 (much risk). 
+
+```{r}
+bes_work <- dplyr::select(bes,
+       ## Working status
+       profile_work_statW7, profile_work_statW11, 
+       profile_work_statW12, profile_work_statW13,
+       ## Job type
+       profile_work_typeW11, profile_work_typeW7,
+       ## Risk of poverty
+       riskPovertyW1, riskPovertyW2, riskPovertyW3, riskPovertyW4, 
+       riskPovertyW6, riskPovertyW7, riskPovertyW8, riskPovertyW9, 
+       riskPovertyW10, riskPovertyW11,
+       ## Risk of unemployment
+       riskUnemploymentW1, riskUnemploymentW2, riskUnemploymentW3, 
+       riskUnemploymentW4, riskUnemploymentW6, riskUnemploymentW7, 
+       riskUnemploymentW8, riskUnemploymentW9, riskUnemploymentW10, 
+       riskUnemploymentW11
+       )
+
+unemployment_risk <- bes_work %>% 
+  dplyr::select(starts_with("riskUnemployment")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(riskUnemployment_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(riskUnemployment_multi)
+
+bes_1$unemployment_risk <- as.vector(as.matrix(unemployment_risk))
+
+binc$gor <- bes$gor
+
+```
+
+## Working status
+
+This variable takes on the most recent valid value of the work status question.
+
+```{r}
+bes_work
+work_status_df <- dplyr::select(bes_work, starts_with("profile_work_stat"))
+work_fill <- rep(NA, nrow(work_status_df))
+for (i in 1:nrow(work_status_df)) {
+    if (!is.na(work_status_df$profile_work_statW7[i])) {
+      work_fill[i] <- work_status_df$profile_work_statW7[i]
+    } else if (!is.na(work_status_df$profile_work_statW11[i])) {
+      work_fill[i] <- work_status_df$profile_work_statW11[i]
+    } else if (!is.na(work_status_df$profile_work_statW12[i])) {
+      work_fill[i] <- work_status_df$profile_work_statW12[i] 
+    } else if (!is.na(work_status_df$profile_work_statW13[i])) {
+      work_fill[i] <- work_status_df$profile_work_statW13[i]
+    } else {
+      work_fill[i] <- 9999
+    }
+}
+
+work_recode <- rep(NA, length(work_fill))
+
+for(i in 1:length(work_fill)) {
+    if(work_fill[i] == 1) {
+      work_recode[i] <- "Working full time"
+    } else if (work_fill[i] == 2 | work_fill[i] == 3)  {
+      work_recode[i] <- "Working part time"
+    } else if (work_fill[i] == 4)  {
+      work_recode[i] <- "Student"
+    } else if (work_fill[i] == 6) {
+      work_recode[i] <- "Unemployed"
+    } else if (work_fill[i] == 5 | work_fill[i] == 7) {
+      work_recode[i] <- "Retired, not working or other" 
+    } else {
+      work_recode[i] <- 9999
+    }
+}
+
+work_recode <- car::recode(work_recode, "9999 = NA")
+work_recode
+bes_1$unemployed <- ifelse(work_recode == "Unemployed", 1, 0)
+```
+
+## Socioeconomic classification
+
+Here I recode occupation to take on the most recent value of occupation. Because there is not a lot of continuity in how people answer this question, I'm not sure what the best strategy is here. Since it makes no sense to take a mean or mode (only 2 variables) value, I just took the most recent value. 
+
+```{r}
+ses_df <- dplyr::select(bes, starts_with("ns_sec_analytic"))
+ses_fill <- rep(NA, nrow(ses_df))
+
+for (i in 1:nrow(ses_df)) {
+    if (!is.na(ses_df$ns_sec_analyticW1W2W3W4W5[i])) {
+      ses_fill[i] <- ses_df$ns_sec_analyticW1W2W3W4W5[i]
+    } else if (!is.na(ses_df$ns_sec_analyticW6W7W8W9[i])) {
+      ses_fill[i] <- ses_df$ns_sec_analyticW6W7W8W9[i]
+    } else {
+      ses_fill[i] <- 9999
+    }
+}
+
+bes_1$occupation_numeric <- ses_fill
+bes_1$occupation <- bes_1$occupation_numeric
+  
+bes_1$occupation[which(bes_1$occupation == 11)] <- "Employers in large organisations and higher managerial"
+bes_1$occupation[which(bes_1$occupation == 12)] <- "Higher professional occupations"
+bes_1$occupation[which(bes_1$occupation == 20)] <- "Lower professional and managerial and higher supervisory"
+bes_1$occupation[which(bes_1$occupation == 30)] <- "Intermediate occupations"
+bes_1$occupation[which(bes_1$occupation == 40)] <- "Employers in small organisations and own account workers"
+bes_1$occupation[which(bes_1$occupation == 50)] <- "Lower supervisory and technical occupations"
+bes_1$occupation[which(bes_1$occupation == 60)] <- "Semi-routine occupations"
+bes_1$occupation[which(bes_1$occupation == 70)] <- "Routine occupations"
+
+worktype <- dplyr::select(bes, starts_with("profile_work_type"))
+
+
+work_type <- rep(NA, nrow(worktype))
+
+for(i in 1:length(work_type)) {
+  if(!is.na(worktype$profile_work_typeW11[i])) {
+    work_type[i] <- worktype$profile_work_typeW11[i]
+  } else if (!is.na(worktype$profile_work_typeW7[i]) & is.na(work_type[i])) {
+    work_type[i] <- worktype$profile_work_typeW7[i]
+  } else {
+    work_type[i] <- NA
+  }
+}
+
+c(length(na.omit(work_type)), length(work_type))
+
+```
+
+## Income
+
+Here I take the mean household income reported across waves.
+
+```{r}
+bes_1$hinc10 <- as.numeric(as_factor(bes_1$profile_gross_householdW10))
+bes_1$hinc10 <- car::recode(bes_1$hinc10, "9999 = NA; 17 = NA; 16 = NA")
+bes_1$hinc11 <- as.numeric(as_factor(bes_1$profile_gross_householdW11))
+bes_1$hinc11 <- car::recode(bes_1$hinc11, "9999 = NA; 17 = NA; 16 = NA")
+bes_1$hinc12 <- as.numeric(as_factor(bes_1$profile_gross_householdW12))
+bes_1$hinc12 <- car::recode(bes_1$hinc12, "9999 = NA; 17 = NA; 16 = NA")
+bes_1$hinc13 <- as.numeric(as_factor(bes_1$profile_gross_householdW13))
+bes_1$hinc13 <- car::recode(bes_1$hinc13, "9999 = NA; 17 = NA; 16 = NA")
+bes_1$hinc <- as.numeric(as_factor(bes_1$profile_gross_household))
+bes_1$hinc <- car::recode(bes_1$hinc, "9999 = NA; 17 = NA; 16 = NA")
+
+income <- bes_1 %>% mutate(income = rowMeans(dplyr::select(bes_1, hinc10, hinc11, hinc12, hinc13, hinc), na.rm = T)) %>%
+  dplyr::select(income)
+
+bes_1$income <- as.vector(as.matrix(income))
+
+c(nrow(na.omit(income)), nrow(income))
+c(length(na.omit(bes_1$unemployment_risk)), length(bes_1$unemployment_risk))
+```
+
+## Age \& Gender
+
+I wish that all the variables were this easy.
+
+```{r}
+bes_1$age <- bes_1$Age
+#bes_1$gender
+
+```
+
+## Left-right orientation
+
+```{r}
+lr <- bes_1 %>% 
+  dplyr::select(starts_with("left")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(leftRight_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(leftRight_multi)
+
+
+bes_1$lr <- as.vector(as.matrix(lr))
+
+```
+
+
+## Attention to politics
+
+```{r}
+attention <- bes_1 %>% 
+  dplyr::select(starts_with("polAtt")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$attention <- as.vector(as.matrix(attention))
+```
+
+
+
+
+## Party ID
+
+PID was asked in all but one wave (i.e. it was asked in 12/13 waves). That being the case, I took the mode response for each person. This is a very fucking difficult variable to fucking recode. What I want to do: take the most frequent value, unless the most frequent value is missing, in which case take the second most fucking frequent value. 
+
+```{r}
+pid_df <- bes %>% dplyr::select(starts_with("partyIdW")) %>%
+  mutate_all(funs(as_factor)) %>%
+  mutate_all(funs(as.character)) 
+
+pid_df$num <- c(1:nrow(pid_df)) 
+
+pid_mode <- apply(pid_df,1,function(x) names(which.max(table(x))))
+
+pid_df$pid_mode <- pid_mode
+pid_df$pid_modetf <- grepl("[[:digit:]]", pid_mode)
+
+pid_fill <- rep(NA, nrow(pid_df))
+pid_df
+
+for(i in 1:nrow(pid_df)) {
+  if(pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW1[i])) {
+    pid_fill[i] <- pid_df$partyIdW1[i] 
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW2[i])) {
+      pid_fill[i] <- pid_df$partyIdW2[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW3[i])) {
+      pid_fill[i] <- pid_df$partyIdW3[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW4[i])) {
+      pid_fill[i] <- pid_df$partyIdW4[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW6[i])) {
+      pid_fill[i] <- pid_df$partyIdW6[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW7[i])) {
+      pid_fill[i] <- pid_df$partyIdW7[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW8[i])) {
+      pid_fill[i] <- pid_df$partyIdW8[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW9[i])) {
+      pid_fill[i] <- pid_df$partyIdW9[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW10[i])) {
+      pid_fill[i] <- pid_df$partyIdW10[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW11[i])) {
+      pid_fill[i] <- pid_df$partyIdW11[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW12[i])) {
+      pid_fill[i] <- pid_df$partyIdW12[i]
+    } else if (pid_df$pid_modetf[i] == TRUE & !is.na(pid_df$partyIdW13[i])) {
+      pid_fill[i] <- pid_df$partyIdW13[i]
+    } else {
+      pid_fill[i] <- pid_df$pid_mode[i]
+    }
+}
+
+
+## Remove remaining ppl who don't have any values, these will show up as numeric based on the method I've used
+pid_fill_tf <- grepl("[[:digit:]]", pid_fill)
+
+for(i in 1:length(pid_fill)) {
+  if(pid_fill_tf[i] == T) {
+    pid_fill[i] <- NA
+  } else {
+    pid_fill[i] <- pid_fill[i]
+  }
+}
+
+#pid_df$pid <- pid_fill
+bes_1$pid <- pid_fill
+```
+
+```{r}
+turnout_likelihood <- bes %>% 
+  dplyr::select(starts_with("turnoutUKGeneralW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$turnout_likelihood <- as.vector(as.matrix(turnout_likelihood))
+```
+
+### Perceived economic situation
+#### econPersonalRetro
+#### econPersonalProsp
+#### riskPoverty
+#### riskUnemployment
+
+```{r}
+participation <- grep("riskP", names(bes), value=TRUE)
+paste(as.character(participation), collapse=", ")
+
+dplyr::select(bes, econPersonalRetroW1, econPersonalRetroW2, econPersonalRetroW3, econPersonalRetroW4, econPersonalRetroW6, econPersonalRetroW7, econPersonalRetroW8, econPersonalRetroW10, econPersonalRetroW11, econPersonalRetroW12, econPersonalRetroW13)
+
+dplyr::select(bes, econPersonalProspW1, econPersonalProspW2, econPersonalProspW6, econPersonalProspW10)
+
+dplyr::select(bes, riskUnemploymentW1, riskUnemploymentW2, riskUnemploymentW3, riskUnemploymentW4, riskUnemploymentW6, riskUnemploymentW7, riskUnemploymentW8, riskUnemploymentW9, riskUnemploymentW10, riskUnemploymentW11)
+
+econ_personal_retro <- bes %>% 
+  dplyr::select(starts_with("econPersonalRetroW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$econ_personal_retro <- as.vector(as.matrix(econ_personal_retro))
+
+econ_personal_prosp <- bes %>% 
+  dplyr::select(starts_with("econPersonalProspW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$econ_personal_prosp <- as.vector(as.matrix(econ_personal_prosp))
+
+
+risk_unemployment <- bes %>% 
+  dplyr::select(starts_with("riskUnemploymentW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$risk_unemployment <- as.vector(as.matrix(risk_unemployment))
+
+risk_poverty <- bes %>% 
+  dplyr::select(starts_with("riskPovertyW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$risk_poverty <- as.vector(as.matrix(risk_poverty))
+
+```
+
+
+
+# Potential dependent variables
+
+### efficacyPolCareW##
+Politicians don’t care what people like me think
+
+```{r}
+#select(bes, efficacyPolCareW1, efficacyPolCareW2, efficacyPolCareW3, efficacyPolCareW4, efficacyPolCareW6, efficacyPolCareW7, efficacyPolCareW8, efficacyPolCareW9, efficacyPolCareW10, efficacyPolCareW11)
+
+efficacy <- bes %>% 
+  dplyr::select(starts_with("efficacyPolCare")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$efficacy <- as.vector(as.matrix(efficacy))
+```
+
+### Attitudes toward redistribution
+
+#### redistSelf##
+Some people feel that government should make much greater efforts to make people’s incomes more equal. Other people feel that government should be much less concerned about how equal people’s incomes are. Where would you place yourself on this scale? (0-1)
+
+#### selfRedistCertainGrid##
+Now, thinking about the scale above. Some people feel very certain about their own position on this scale, while others may feel somewhat certain or not at all certain. How certain are you about your position on this scale?
+
+* This variable would be used to measure intensity of the redistribution preference
+
+```{r}
+#select(bes, selfRedistCertainW1, selfRedistCertainW2, selfRedistCertainW4, selfRedistCertainW6, selfRedistCertainW7)
+#select(bes, redistSelfW1, redistSelfW2, redistSelfW3, redistSelfW4, redistSelfW6, redistSelfW7, redistSelfW10, redistSelfW11, redistSelfW12, redistSelfW13)
+
+redistribution <- bes %>% 
+  dplyr::select(starts_with("redistSelfW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$redistribution <- as.vector(as.matrix(redistribution))
+
+```
+
+### satDemUKW##
+My member of parliament tries hard to look after the interests of people who live in my constituency
+
+```{r}
+# select(bes, satDemUKW1, satDemUKW2, satDemUKW3, satDemUKW4, satDemUKW6, satDemUKW7, satDemUKW8, satDemUKW9, satDemUKW10, satDemUKW11, satDemUKW13)
+
+satdem <- bes %>% 
+  dplyr::select(starts_with("satDemUKW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$satdem <- as.vector(as.matrix(satdem))
+
+```
+
+### mpLooksAfterConstInterestW4
+My member of parliament tries hard to look after the interests of people who live in my constituency
+
+```{r}
+# select(bes, mpLooksAfterConstInterestW4)
+
+mplooks <- bes %>% 
+  dplyr::select(starts_with("mpLooksAfterConstInterestW4")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$mplooksafter <- as.vector(as.matrix(mplooks))
+```
+
+
+### Values (lr1W##, lr3W##, lr4##)
+
+* Government should redistribute income from the better off to those who are less well off
+
+* Ordinary working people do not get their fair share of the nation’s wealth
+
+* There is one law for the rich and one for the poor
+
+
+```{r}
+# Gov should redist
+#select(bes, lr1W6, lr1W13, lr1W1W2W3W4W5, lr1W7W8W9, lr1W10W11W12)
+# Ordinary ppl no fair share of wealth
+#select(bes, lr3W6, lr3W13, lr3W1W2W3W4W5, lr3W7W8W9, lr3W10W11W12)
+# One law 4 rich, one 4 poor
+#select(bes, lr4W6, lr4W13, lr4W1W2W3W4W5, lr4W7W8W9, lr4W10W11W12)
+
+should_redistribute <- bes %>% 
+  dplyr::select(starts_with("lr1")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+no_fair_share <- bes %>% 
+  dplyr::select(starts_with("lr3")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+one_law_rich_poor <- bes %>% 
+  dplyr::select(starts_with("lr4")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$should_redistribute <- as.vector(as.matrix(should_redistribute))
+bes_1$no_fair_share <- as.vector(as.matrix(no_fair_share))
+bes_1$one_law_rich_poor <- as.vector(as.matrix(one_law_rich_poor))
+```
+
+### strongLeaderW##
+The best way to run the country would be to have a strong leader who does not have to bother with parliament or elections
+
+```{r}
+dplyr::select(bes, strongLeaderW10, strongLeaderW11)
+
+strong_leader <- bes %>% 
+  dplyr::select(starts_with("strongLeader")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$strong_leader <- as.vector(as.matrix(strong_leader))
+```
+
+### polPreferToFightW##
+Parties and politicians in the UK are more concerned with fighting each other than with furthering the public interest
+
+```{r}
+#select(bes, polPreferToFightW5, polPreferToFightW6)
+
+pol_prefer_fight <- bes %>% 
+  dplyr::select(starts_with("polPrefer")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$pol_prefer_fight <- as.vector(as.matrix(pol_prefer_fight))
+```
+
+### trustMPsW##
+General trust in MPs
+
+```{r}
+# select(bes, trustMPsW1, trustMPsW2, trustMPsW3, trustMPsW4, trustMPsW6, trustMPsW7, trustMPsW8, trustMPsW9, trustMPsW10, trustMPsW12)
+
+trust_mps <- bes %>% 
+  dplyr::select(starts_with("trustMP")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$trust_mps <- as.vector(as.matrix(trust_mps))
+```
+
+### voteMakesDifferenceW##
+How likely is it that your vote will make a difference in terms of which party wins the election in your local constituency?
+
+```{r}
+# select(bes, voteMakesDifferenceW4, voteMakesDifferenceW11)
+vote_makes_difference <- bes %>% 
+  dplyr::select(starts_with("voteMa")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(polAttention_multi = rowMeans(., na.rm = T)) %>%
+  dplyr::select(polAttention_multi)
+
+bes_1$vote_makes_difference <- as.vector(as.matrix(vote_makes_difference))
+```
+
+
+```{r}
+participation <- grep("ineq", names(bes), value=TRUE)
+
+ineq_know <- bes %>% dplyr::select(inequalityChangeW2, inequalityChangeW3, inequalityChangeW4) %>%
+  mutate_all(funs(as_factor)) %>%
+  mutate_all(funs(as.character)) 
+
+ineq_change <- ineq_know
+ineq_change
+ineq_change$inequalityChangeW2[is.na(ineq_change$inequalityChangeW2)] <- "0"
+ineq_change$inequalityChangeW2[ineq_change$inequalityChangeW2 == "Don't know"] <- "1"
+ineq_change$inequalityChangeW2[ineq_change$inequalityChangeW2 == "Smaller"] <- "2"
+ineq_change$inequalityChangeW2[ineq_change$inequalityChangeW2 == "About the same"] <- "3"
+ineq_change$inequalityChangeW2[ineq_change$inequalityChangeW2 == "Larger"] <- "4"
+
+ineq_change$inequalityChangeW3[is.na(ineq_change$inequalityChangeW3)] <- "0"
+ineq_change$inequalityChangeW3[ineq_change$inequalityChangeW3 == "Don't know"] <- "1"
+ineq_change$inequalityChangeW3[ineq_change$inequalityChangeW3 == "Smaller"] <- "2"
+ineq_change$inequalityChangeW3[ineq_change$inequalityChangeW3 == "About the same"] <- "3"
+ineq_change$inequalityChangeW3[ineq_change$inequalityChangeW3 == "Larger"] <- "4"
+
+ineq_change$inequalityChangeW4[is.na(ineq_change$inequalityChangeW4)] <- "0"
+ineq_change$inequalityChangeW4[ineq_change$inequalityChangeW4 == "Don't know"] <- "1"
+ineq_change$inequalityChangeW4[ineq_change$inequalityChangeW4 == "Smaller"] <- "2"
+ineq_change$inequalityChangeW4[ineq_change$inequalityChangeW4 == "About the same"] <- "3"
+ineq_change$inequalityChangeW4[ineq_change$inequalityChangeW4 == "Larger"] <- "4"
+
+
+ineq_change$x <- apply(ineq_change, 1 , paste , collapse = "" )
+ineq_change$x <- as.numeric(ineq_change$x)
+ineq_change
+ineq_change$ineq_change <- ifelse(ineq_change$x == 400 |
+                                    ineq_change$x == 404 |
+                                    ineq_change$x == 444 |
+                                    ineq_change$x == 4 |
+                                    ineq_change$x == 44 |
+                                    ineq_change$x == 440, 1,
+                                  ifelse(ineq_change$x == 0, NA, 0))
+
+bes_1$ineq_right <- ineq_change$ineq_change
+binc$ineq_right <- ineq_change$ineq_change
+ineq_change$inequalityChangeW2 <- ineq_know$inequalityChangeW2
+ineq_change$inequalityChangeW3 <- ineq_know$inequalityChangeW3
+ineq_change$inequalityChangeW4 <- ineq_know$inequalityChangeW4
+
+```
+
+
+```{r}
+weight_avg <- dplyr::select(bes, starts_with("wt_full")) %>%
+  mutate(weight_avg = rowMeans(., na.rm = T)) %>%
+  dplyr::select(weight_avg)
+
+bes_1$weight_avg <- as.vector(as.matrix(weight_avg))
+
+weight_core <- dplyr::select(bes, starts_with("wt_core")) %>%
+  mutate(weight_core = rowMeans(., na.rm = T)) %>%
+  dplyr::select(weight_core)
+
+bes_1$weight_core <- as.vector(as.matrix(weight_core))
+```
+
+
+```{r}
+participation <- grep("govtHandouts", names(bes), value=TRUE)
+paste(as.character(participation), collapse=", ")
+
+unemployment_nofault <- bes %>% 
+  dplyr::select(starts_with("reasonForUnemploymentW")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(unemployment_nofault = rowMeans(., na.rm = T)) %>%
+  dplyr::select(unemployment_nofault)
+
+bes_1$unemployment_nofault <- as.vector(as.matrix(unemployment_nofault))
+binc$unemployment_nofault <- as.vector(as.matrix(unemployment_nofault))
+
+rely_on_handouts <- bes %>% 
+  dplyr::select(starts_with("govtHandouts")) %>%
+  mutate_all(funs(as.numeric)) %>%
+  mutate_all(funs(ifelse( . == 9999, NA, .))) %>%
+  mutate(rely_on_handouts = rowMeans(., na.rm = T)) %>%
+  dplyr::select(rely_on_handouts)
+
+bes_1$rely_on_handouts <- as.vector(as.matrix(rely_on_handouts))
+
+binc$rely_on_handouts <- as.vector(as.matrix(rely_on_handouts))
+```
+
+```{r}
+issues <- dplyr::select(bes, starts_with("miilabelW"))
+
+issue_names <- names(issues)
+issue_names
+for(i in 1:length(issue_names)) {
+  issues_hold <- issues[ , issue_names[i]]
+  issues[ , issue_names[i]] <- ifelse(issues_hold == 10, 1, 0)
+}
+
+social_inequality <- issues %>% 
+  mutate(social_inequality = rowSums(., na.rm = T)) %>%
+  dplyr::select(social_inequality)
+
+social_inequality
+binc$social_inequality <- as.vector(as.matrix(social_inequality))
+binc$social_inequality_dummy <- ifelse(social_inequality$social_inequality == 0, 0, 1)
+```
+```{r}
+bes_680 <- dplyr::select(bes_1, local_authority, vote_makes_difference, trust_mps, pol_prefer_fight, strong_leader, one_law_rich_poor, should_redistribute, no_fair_share, mplooksafter, satdem, redistribution, efficacy, risk_poverty, risk_unemployment, econ_personal_prosp, econ_personal_retro, turnout_likelihood, pid, attention, lr, age, gender, income, occupation, unemployed, unemployment_risk, education, ineq_right, weight_avg, weight_core, unemployment_nofault, rely_on_handouts)
+bes_680$pid <- as.factor(bes_680$pid)
+bes_680$pid <- relevel(bes_680$pid, ref = 2)
+# write.csv(bes_680, file = "bes_680.csv")
+```
+
+DESCRIPTIVE STATISTICS
+```{r}
+dnsty <- function(y, title){
+  ggplot(binc, aes(y)) +
+  geom_density(fill = "ivory2", alpha = 0.5 , size = 0.4) +
+  theme_light() +
+  xlab(title) +
+  theme(axis.title.y = element_blank())
+}
+
+bar <- function(y, title){
+  yeah <- data.frame(a = round(y[which(!is.na(y))], digits = 0))
+ggplot(yeah, aes(factor(a))) +
+  geom_bar(fill = "ivory2", colour = "black", alpha = 0.5, size = 0.4) +
+  theme_light() +
+  xlab(title) +
+  theme(axis.title.y = element_blank())
+}
+
+pl1 <- bar(binc$income, "Income\n  (original scale)") 
+pl2 <- bar(binc$risk_poverty, "Risk of poverty \n (original scale)")
+pl3 <- bar(binc$education, "Education \n ")
+pl4 <- dnsty(binc$age, "Age \n ")
+pl5 <- bar(binc$lr, "Left-right \n self-placement")
+pl6 <- bar(binc$attention, "Attention to \n politics")
+pl7 <- bar(binc$gender, "Female \n ")
+
+bar2 <- function(y, title){
+  yeah <- data.frame(a = na.omit(y))
+  ggplot(yeah, aes(factor(a))) +
+    geom_bar(fill = "ivory2", colour = "black", alpha = 0.5, size = 0.4) +
+    theme_light() +
+    xlab(title) +
+    theme(axis.title.y = element_blank())
+}
+
+pl8 <- bar2(binc$inccat, "Income \n (categories)")
+pl9 <- bar2(binc$risk, "Risk of poverty \n (categories)")
+p20 <- bar2(binc$routine, "Routine/ \n  semi-routine")
+
+
+
+ppp <- grid.arrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7, pl8, pl9, p20, nrow = 2)
+
+ggsave(file="ic_desc.png", ppp, width = 9, height = 4)
+
+pl8 <- bar(binc$no_fair_share, "Fair Share") 
+pl9 <- bar(binc$redistribution, "Redistribution") 
+ppp2 <- grid.arrange(pl8, pl9, nrow = 1)
+ggsave(file="ic_desc2.png", ppp2, width = 4.5, height = 2.1)
+
+table(binc$no_fair_share)
+table(bes$lr3W1W2W3W4W5)
+```
+
+```{r}
+library(reporttools)
+
+cbind(binc$income, binc$risk_poverty, binc$age, binc$lr, binc$attention)
+
+describes <- dplyr::select(binc, income, risk_poverty, education, routine, age, lr, attention, gender) %>%
+  psych::describe(., skew = TRUE, check = TRUE) %>%
+  dplyr::select(n, mean, sd, min, max, range, se) %>%
+  rownames_to_column(., var = "variable") %>%
+  filter(., !str_detect(variable, "_l"), !str_detect(variable, "l_"), !str_detect(variable, "region"))
+
+xtable(describes, digits = 4)
+```
+
+
+LOCAL INEQUALITY and DEMOGRAPHIC DATA
+
+```{r clean LSOA income deprivation}
+lsoa_inc <- read.csv("LSOA_income_deprivation.csv")
+lsoa_inc <- lsoa_inc[7:nrow(lsoa_inc),2:3]
+names(lsoa_inc) <- c("local_authority", "income_deprivation")
+
+lsoa_inc$income_deprivation <- as.numeric(as.character(lsoa_inc$income_deprivation))
+
+arrange(lsoa_inc, income_deprivation)
+## Removing additional identifying information, just keep LA
+lsoa_inc$local_authority <- sub('0.*','', lsoa_inc$local_authority)
+lsoa_inc$local_authority <- sub('1.*','', lsoa_inc$local_authority)
+lsoa_inc$local_authority <- trimws(lsoa_inc$local_authority, which = "right")
+
+#lsoa_inc$income_deprivation <- (max(lsoa_inc$income_deprivation, na.rm = T) + min(lsoa_inc$income_deprivation, na.rm = T)) - lsoa_inc$income_deprivation
+
+
+# Some aggregate statistics
+lsoa_inc_sum <- lsoa_inc %>% 
+  group_by(local_authority) %>%
+  mutate(rank = rank(income_deprivation, ties.method = "min")) %>%
+  dplyr::summarize(gini = Gini(income_deprivation),
+                   atkinson = Atkinson(income_deprivation),
+                   sd = sd(income_deprivation), 
+                   n = n(),
+                   iqr = IQR(income_deprivation),
+                   mean = mean(income_deprivation, na.rm = T),
+                   meanrank = sd(rank))
+
+write.csv(lsoa_inc_sum, "lsoa_inc_agg.csv")
+```
+
+Cleaning the MSOA weekly income estimates 
+```{r}
+msoa_inc_total <- read_xls("MSOA_income_estimates.xls", sheet = 4)
+msoa_inc_net <- read_xls("MSOA_income_estimates.xls", sheet = 5)
+msoa_inc_net_beforehousing <- read_xls("MSOA_income_estimates.xls", sheet = 6)
+msoa_inc_net_afterhousing <- read_xls("MSOA_income_estimates.xls", sheet = 7)
+
+msoa_function <- function(data){
+  data <- data[5:nrow(data), c(4, 7)]
+  names(data) <- c("local_authority", "weekly_income")
+  data$local_authority <- as.factor(data$local_authority)
+  data$weekly_income <- as.numeric(data$weekly_income)
+  estimates <- data %>% 
+  group_by(local_authority) %>%
+  dplyr::summarize(gini = ineq(weekly_income),
+                   mean = mean(weekly_income),
+                   sd = sd(weekly_income),
+                   count = length(weekly_income),
+                   atkinson = Atkinson(weekly_income, parameter = 2),
+                   q75 = quantile(weekly_income, na.rm = T, 0.75)/quantile(weekly_income, na.rm = T, 0.25))
+  estimates
+}
+
+msoa_total <- msoa_function(msoa_inc_total)
+msoa_net <- msoa_function(msoa_inc_net)
+msoa_b4house <- msoa_function(msoa_inc_net_beforehousing)
+msoa_afterhouse <- msoa_function(msoa_inc_net_afterhousing)
+
+arrange(msoa_afterhouse, q75)
+msoa_estimates <- cbind(msoa_total[,1], msoa_total[,c(3, 7)], msoa_net[,c(3, 7)], msoa_b4house[,c(3, 7)],msoa_afterhouse[,c(3, 7)])
+names(msoa_estimates) <- c("local_authority", "totalmean", "totalq7525", "netmean", "netq7525", "before_housingmean", 
+                           "before_housingq7525", "after_housingmean", "after_houseingq7525")
+
+write.csv(msoa_estimates, "msoa_estimates.csv")
+```
+
+```{r}
+
+nomis_ethnic <- read_excel("nomis_ethnic.xlsx")
+nomis_density <- read_excel("nomis_density.xlsx")
+
+nomis_density <- nomis_density[8:nrow(nomis_density), c(1, 3)]
+names(nomis_density) <- c("local_authority", "density")
+
+nomis_ethnic <- nomis_ethnic[8:nrow(nomis_ethnic), c(1, 2)]
+names(nomis_ethnic) <- c("local_authority", "pctwhite")
+
+nomis_demographic <- merge(nomis_density, nomis_ethnic)
+
+write.csv(nomis_demographic, "nomis_demographic.csv")
+```
+
+MORE DATA WRANGLING
+
+```{r cars}
+########################################
+###### INDIVIDUAL LEVEL VARIABLES ######
+########################################
+
+b <- read.csv("bes_680.csv")
+
+##################
+###### LSOA ######
+##################
+
+lsoa <- read.csv("lsoa_inc_agg.csv")
+
+lsoa <- lsoa %>% dplyr::select(local_authority, gini, mean, meanrank)
+names(lsoa) <- c("local_authority", "lsoa_gini", "lsoa_mean", "lsoa_meanrank")
+lsoa$local_authority <- as.character(lsoa$local_authority)
+lsoa$local_authority[lsoa$local_authority == "Herefordshire"] <- "Herefordshire, County of" 
+lsoa$local_authority[lsoa$local_authority == "City of London"] <- "No City" 
+lsoa$local_authority[lsoa$local_authority == "Bristol"] <- "Bristol, City of"
+lsoa$local_authority[lsoa$local_authority == "Kingston upon Hull"] <- "Kingston upon Hull, City of"
+
+##################
+###### MSOA ######
+##################
+
+msoa <- read.csv("msoa_estimates.csv")
+msoa <- msoa %>% dplyr::select(local_authority, totalmean, totalq7525, after_housingmean, after_houseingq7525)
+names(msoa) <- c("local_authority", "msoa_totalmean", "msoa_totalq7525", "msoa_after_housingmean", "msoa_after_houseingq7525")
+msoa$local_authority <- as.character(msoa$local_authority)
+msoa$local_authority[msoa$local_authority == "City of London"] <- "No City"
+
+binc <- merge(lsoa, msoa, by = "local_authority", all = T)
+binc <- merge(b, binc, by = "local_authority", all.x = T)
+
+## LSOA DEPRIVATION
+binc$lsoa_mean_ln <- log(binc$lsoa_mean)
+binc$lsoa_meanrank_ln <- log(binc$lsoa_meanrank)
+
+# SCALE FROM 0 to 1
+binc$lsoa_meanrank <- (binc$lsoa_meanrank - min(binc$lsoa_meanrank, na.rm = T))/(max(binc$lsoa_meanrank, na.rm = T) - min(binc$lsoa_meanrank, na.rm = T))
+binc$lsoa_mean <- (binc$lsoa_mean - min(binc$lsoa_mean, na.rm = T))/(max(binc$lsoa_mean, na.rm = T) - min(binc$lsoa_mean, na.rm = T))
+binc$lsoa_meanrank_ln <- (binc$lsoa_meanrank_ln - min(binc$lsoa_meanrank_ln, na.rm = T))/(max(binc$lsoa_meanrank_ln, na.rm = T) - min(binc$lsoa_meanrank_ln, na.rm = T))
+binc$lsoa_mean_ln <- (binc$lsoa_mean_ln - min(binc$lsoa_mean_ln, na.rm = T))/(max(binc$lsoa_mean_ln, na.rm = T) - min(binc$lsoa_mean_ln, na.rm = T))
+
+## MSOA AFTER HOUSING
+# SCALE FROM 0 to 1
+binc$msoa_after_housingmean_ln <- log(binc$msoa_after_housingmean)
+binc$msoa_after_houseingq7525_ln <- log(binc$msoa_after_housingmean)
+
+binc$msoa_after_houseingq7525 <- (binc$msoa_after_houseingq7525 - range(binc$msoa_after_houseingq7525, na.rm = T)[1])/
+  (range(binc$msoa_after_houseingq7525, na.rm = T)[2] - range(binc$msoa_after_houseingq7525, na.rm = T)[1])
+
+binc$msoa_after_housingmean <- (binc$msoa_after_housingmean - range(binc$msoa_after_housingmean, na.rm = T)[1])/
+  (range(binc$msoa_after_housingmean, na.rm = T)[2] - range(binc$msoa_after_housingmean, na.rm = T)[1])
+
+binc$msoa_after_housingmean_ln <- (binc$msoa_after_housingmean_ln - range(binc$msoa_after_housingmean_ln, na.rm = T)[1])/
+  (range(binc$msoa_after_housingmean_ln, na.rm = T)[2] - range(binc$msoa_after_housingmean_ln, na.rm = T)[1])
+
+binc$msoa_after_houseingq7525_ln <- (binc$msoa_after_houseingq7525_ln - range(binc$msoa_after_houseingq7525_ln, na.rm = T)[1])/
+  (range(binc$msoa_after_houseingq7525_ln, na.rm = T)[2] - range(binc$msoa_after_houseingq7525_ln, na.rm = T)[1])
+
+nomis_demographic <- read.csv("nomis_demographic.csv")
+binc <- merge(binc, nomis_demographic, by = "local_authority", all.x = T)
+
+binc$pctwhite <- binc$pctwhite/100
+
+
+```
+
+
+```{r }
+###############################
+###### SCALING VARIABLES ######
+###############################
+
+## DV
+
+binc$should_redistribute <- (binc$should_redistribute - 1)/4
+binc$no_fair_share <- (binc$no_fair_share - 1)/4
+binc$redistribution <- (binc$redistribution)/10
+binc$redistribution <- 1 - binc$redistribution
+binc$unemployment_nofault <- (binc$unemployment_nofault - 1)/4
+binc$rely_on_handouts <- (binc$rely_on_handouts - 1)/4
+
+
+binc$income_scaled <- (binc$income - 1)/14
+binc$lr <- (binc$lr)/10
+binc$attention <- (binc$attention)/10
+binc$pid <- relevel(binc$pid, ref = "Conservative")
+
+binc$risk_unemployment <- (binc$risk_unemployment - 1)/4
+binc$risk_unemployment <- 1 - binc$risk_unemployment
+
+## INCOME
+binc$inccat <- ifelse(binc$income < 4, "Low",
+                      ifelse(binc$income >= 13, "High", "Mid"))
+## RISK
+binc$risk <- ifelse(binc$risk_unemployment <= 0.25, "High",
+                      ifelse(binc$risk_unemployment >= 0.75, "Low", "Mid"))
+
+
+binc$pid <- as.character(as_factor(binc$pid))
+binc$pid[binc$pid == "Don't know"] <- "Other/don't know/none"
+binc$pid[binc$pid == "No - none"] <- "Other/don't know/none"
+binc$pid[binc$pid == "Other"] <- "Other/don't know/none"
+#c(table(binc$incqlow), table(binc$incmid), table(binc$inchigh))
+binc$pid <- as.factor(binc$pid)
+binc$pid <- relevel(binc$pid, ref = "Labour")
+
+(c(1, 2, 3, 4, 5) - 1)/4
+binc$routine <- ifelse(binc$occupation == "Routine occupations" | binc$occupation == "Semi-routine occupations" | 
+                                      binc$occupation == "Lower supervisory and technical occupations", 1, 0)
+```
+
+## FUNCTIONS
+```{r}
+cluster_errors <- function(model, cluster){
+  vcv <- multiwayvcov::cluster.vcov(model = model, cluster = data.frame(cluster))
+  coefs <- coeftest(model, vcv)
+  print(coefs)
+}
+
+ggmarg <- function(data){
+  p <- ggplot(data, aes(x, y)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.5, fill = "lightyellow3") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "firebrick4") +
+  theme_linedraw() +
+  theme(axis.title = element_text(size = 12))
+  p + geom_line(size = 0.8)
+}
+
+unique_las1 <- function(dv){
+  mod <- model.frame(dv ~ income_scaled + msoa_after_houseingq7525 + 
+                       msoa_after_housingmean + education + age + I(age^2) + 
+                       pid + lr + attention + gender + pctwhite + density + local_authority, data = binc)
+  length(unique(mod$local_authority))
+}
+
+unique_las2 <- function(dv){
+  mod <- model.frame(dv ~ risk_poverty + msoa_after_houseingq7525 + 
+                       msoa_after_housingmean + education + age + I(age^2) + 
+                       pid + lr + attention + gender + pctwhite + density + local_authority, data = binc)
+  length(unique(mod$local_authority))
+}
+```
+
+MODELS AND PLOTS FINALLY
+
+```{r }
+####################################################
+### AFTER HOUSING MSOA INEQUALITY AND FAIR SHARE ###
+####################################################
+######################## INCOME #################### 
+####################################################
+
+binc$inccat <- as.factor(binc$inccat)
+binc$inccat <- relevel(binc$inccat, ref = "Mid")
+
+b1 <- lm(no_fair_share ~ inccat*msoa_after_houseingq7525 + inccat*msoa_after_housingmean +
+           education + routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+
+b1_cl <- cluster_errors(b1, binc$local_authority)
+b1_vcv<- multiwayvcov::cluster.vcov(model = b1, cluster = data.frame(binc$local_authority))
+
+b1_numsa <- interaction_plot_continuous2(b1, effect = "inccatLow", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "inccatLow:msoa_after_houseingq7525", 
+                             varcov = b1_vcv)
+b1_numsb <- interaction_plot_continuous2(b1, effect = "inccatHigh", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "inccatHigh:msoa_after_houseingq7525", 
+                             varcov = b1_vcv)
+
+b1_df <- data.frame(rbind(b1_numsa, b1_numsb))
+b1_df$Income <- c(rep("Low income", nrow(b1_numsa)), rep("High income", nrow(b1_numsb)))
+
+b1_plot <- ggplot(b1_df, aes(x, y, fill = Income)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Income, linetype = Income)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for income") +
+  xlab("MSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .85)) +
+  ggtitle("Marginal effects of income on \n perceptions of unfairness");b1_plot
+  
+
+texreg(list(b1, b1a), 
+       override.se = list(b1_cl[,2], b1a_cl[,2]),
+       override.pvalues = list(b1_cl[,4], b1a_cl[,4]))
+
+b1a <- lm(no_fair_share ~ inccat + msoa_after_houseingq7525  + msoa_after_housingmean +
+           education + routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b1a_cl <- cluster_errors(b1a, binc$local_authority)
+b1a_vcv<- multiwayvcov::cluster.vcov(model = b1a, cluster = data.frame(binc$local_authority))
+
+```
+
+```{r }
+########################################################
+### AFTER HOUSING MSOA INEQUALITY AND REDISTRIBUTION ###
+########################################################
+######################## INCOME ######################## 
+########################################################
+
+b2 <- lm(redistribution ~ inccat*msoa_after_houseingq7525 + inccat*msoa_after_housingmean +
+           education + routine +  age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+
+b2_cl <- cluster_errors(b2, binc$local_authority)
+b2_vcv<- multiwayvcov::cluster.vcov(model = b2, cluster = data.frame(binc$local_authority))
+
+b2_numsa <- interaction_plot_continuous2(b2, effect = "inccatLow", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "inccatLow:msoa_after_houseingq7525", 
+                             varcov = b2_vcv)
+b2_numsb <- interaction_plot_continuous2(b2, effect = "inccatHigh", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "inccatHigh:msoa_after_houseingq7525", 
+                             varcov = b2_vcv)
+
+b2_df <- data.frame(rbind(b2_numsa, b2_numsb))
+b2_df$Income <- c(rep("Low income", nrow(b2_numsb)), rep("High income", nrow(b2_numsa)))
+
+b2_plot <- ggplot(b2_df, aes(x, y, fill = Income)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Income, linetype = Income)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for income") +
+  xlab("MSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .85)) +
+  ggtitle("Marginal effects of income on  \n redistributive preferences"); b2_plot
+  
+
+texreg(b2, 
+       override.se = b2_cl[,2],
+       override.pvalues = b2_cl[,4])
+
+b2a <- lm(redistribution ~ inccat + msoa_after_houseingq7525  + msoa_after_housingmean +
+           education + routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b2a_cl <- cluster_errors(b2a, binc$local_authority)
+b2a_vcv<- multiwayvcov::cluster.vcov(model = b2a, cluster = data.frame(binc$local_authority))
+```
+
+
+
+```{r }
+########################################################
+### AFTER HOUSING MSOA INEQUALITY AND NO FAIR SHARE  ###
+########################################################
+######################### RISK ######################### 
+########################################################
+binc$risk <- as.factor(binc$risk)
+binc$risk <- relevel(binc$risk, ref = "Mid")
+
+b3 <- lm(no_fair_share ~ risk*msoa_after_houseingq7525 + risk*msoa_after_housingmean +
+           education + routine +  age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b3_cl <- cluster_errors(b3, binc$local_authority)
+b3_vcv<- multiwayvcov::cluster.vcov(model = b3, cluster = data.frame(binc$local_authority))
+
+b3_numsa <- interaction_plot_continuous2(b3, effect = "riskLow", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "riskLow:msoa_after_houseingq7525", 
+                             varcov = b3_vcv)
+b3_numsb <- interaction_plot_continuous2(b3, effect = "riskHigh", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "riskHigh:msoa_after_houseingq7525", 
+                             varcov = b3_vcv)
+
+b3_df <- data.frame(rbind(b3_numsa, b3_numsb))
+b3_df$Risk <- c(rep("Low risk", nrow(b3_numsb)), rep("High risk", nrow(b3_numsa)))
+
+b3_plot <- ggplot(b3_df, aes(x, y, fill = Risk)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Risk, linetype = Risk)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for risk") +
+  xlab("MSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .15)) +
+  ggtitle("Marginal effects of risk on  \n perceptions of unfairness"); b3_plot
+  
+
+texreg(b3, 
+       override.se = b3_cl[,2],
+       override.pvalues = b3_cl[,4])
+
+
+b3a <- lm(no_fair_share ~ risk + msoa_after_houseingq7525 + msoa_after_housingmean +
+           education + routine +  age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b3a_cl <- cluster_errors(b3a, binc$local_authority)
+b3a_vcv<- multiwayvcov::cluster.vcov(model = b3a, cluster = data.frame(binc$local_authority))
+```
+
+```{r }
+########################################################
+### AFTER HOUSING MSOA INEQUALITY AND REDISTRIBUTION ###
+########################################################
+######################### RISK ######################### 
+########################################################
+binc$risk <- as.factor(binc$risk)
+binc$risk <- relevel(binc$risk, ref = "Mid")
+
+b4 <- lm(redistribution ~ risk*msoa_after_houseingq7525 + risk*msoa_after_housingmean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b4_cl <- cluster_errors(b4, binc$local_authority)
+b4_vcv<- multiwayvcov::cluster.vcov(model = b4, cluster = data.frame(binc$local_authority))
+
+b4_numsa <- interaction_plot_continuous2(b4, effect = "riskLow", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "riskLow:msoa_after_houseingq7525", 
+                             varcov = b4_vcv)
+b4_numsb <- interaction_plot_continuous2(b4, effect = "riskHigh", 
+                             moderator = "msoa_after_houseingq7525",
+                             interaction = "riskHigh:msoa_after_houseingq7525", 
+                             varcov = b4_vcv)
+
+b4_df <- data.frame(rbind(b3_numsa, b4_numsb))
+b4_df$Risk <- c(rep("Low risk", nrow(b4_numsa)), rep("High risk", nrow(b4_numsb)))
+
+b4_plot <- ggplot(b4_df, aes(x, y, fill = Risk)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Risk, linetype = Risk)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for risk") +
+  xlab("MSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .15)) +
+  ggtitle("Marginal effects of risk on  \n redistributive preferences"); b4_plot
+  
+
+texreg(b4, 
+       override.se = b4_cl[,2],
+       override.pvalues = b4_cl[,4])
+
+b4a <- lm(redistribution ~ risk + msoa_after_houseingq7525 + msoa_after_housingmean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b4a_cl <- cluster_errors(b4a, binc$local_authority)
+b4a_vcv<- multiwayvcov::cluster.vcov(model = b4a, cluster = data.frame(binc$local_authority))
+```
+
+ALL MSOA MODELS
+```{r}
+texreg(list(b1a, b1, b2a, b2, b3a, b3, b4a, b4), 
+       override.se = list(b1a_cl[,2], b1_cl[,2], 
+                          b2a_cl[,2], b2_cl[,2],
+                          b3a_cl[,2], b3_cl[,2],
+                          b4a_cl[,2], b4_cl[,2]),
+       override.pvalues = list(b1a_cl[,4], b1_cl[,4], 
+                          b2a_cl[,4], b2_cl[,4],
+                          b3a_cl[,4], b3_cl[,4],
+                          b4a_cl[,4], b4_cl[,4]))
+```
+
+
+############################################################
+### LSOA ###### LSOA ###### LSOA ###### LSOA ###### LSOA ###
+############################################################
+
+```{r }
+########################################################
+### AFTER HOUSING LSOA INEQUALITY AND NO FAIR SHARE ###
+########################################################
+######################### INCOME ########################
+########################################################
+b5 <- lm(no_fair_share ~ inccat*lsoa_meanrank + inccat*lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+
+b5_cl <- cluster_errors(b5, binc$local_authority)
+b5_vcv<- multiwayvcov::cluster.vcov(model = b5, cluster = data.frame(binc$local_authority))
+
+b5_numsa <- interaction_plot_continuous2(b5, effect = "inccatLow", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "inccatLow:lsoa_meanrank", 
+                             varcov = b5_vcv)
+b5_numsb <- interaction_plot_continuous2(b5, effect = "inccatHigh", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "inccatHigh:lsoa_meanrank", 
+                             varcov = b5_vcv)
+
+b5_df <- data.frame(rbind(b5_numsa, b5_numsb))
+b5_df$Income <- c(rep("Low income", nrow(b5_numsa)), rep("High income", nrow(b5_numsb)))
+
+b5_plot <- ggplot(b5_df, aes(x, y, fill = Income)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Income, linetype = Income)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.18, 0.18) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for income") +
+  xlab("LSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .85)) +
+  ggtitle("Marginal effects of income on  \n perceptions of unfairness")
+  
+
+texreg(b5, 
+       override.se = b5_cl[,2],
+       override.pvalues = b5_cl[,4])
+
+b5a <- lm(no_fair_share ~ inccat + lsoa_meanrank + lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b5a_cl <- cluster_errors(b5a, binc$local_authority)
+b5a_vcv<- multiwayvcov::cluster.vcov(model = b5a, cluster = data.frame(binc$local_authority))
+```
+
+```{r }
+########################################################
+### AFTER HOUSING LSOA INEQUALITY AND REDISTRIBUTION ###
+########################################################
+######################### INCOME ########################
+########################################################
+b6 <- lm(redistribution ~ inccat*lsoa_meanrank + inccat*lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b6
+b6_cl <- cluster_errors(b6, binc$local_authority)
+b6_vcv<- multiwayvcov::cluster.vcov(model = b6, cluster = data.frame(binc$local_authority))
+
+b6_numsa <- interaction_plot_continuous2(b6, effect = "inccatLow", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "inccatLow:lsoa_meanrank", 
+                             varcov = b6_vcv)
+b6_numsb <- interaction_plot_continuous2(b6, effect = "inccatHigh", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "inccatHigh:lsoa_meanrank", 
+                             varcov = b6_vcv)
+
+b6_df <- data.frame(rbind(b6_numsa, b6_numsb))
+b6_df$Income <- c(rep("Low income", nrow(b6_numsa)), rep("High income", nrow(b6_numsb)))
+
+b6_plot <- ggplot(b6_df, aes(x, y, fill = Income)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Income, linetype = Income)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for income") +
+  xlab("LSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .85)) +
+  ggtitle("Marginal effects of income on  \n redistributive preferences")
+  
+
+texreg(b6, 
+       override.se = b6_cl[,2],
+       override.pvalues = b6_cl[,4])
+
+
+b6a <- lm(redistribution ~ inccat + lsoa_meanrank + lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b6a
+b6a_cl <- cluster_errors(b6a, binc$local_authority)
+b6a_vcv<- multiwayvcov::cluster.vcov(model = b6a, cluster = data.frame(binc$local_authority))
+```
+
+```{r }
+########################################################
+### AFTER HOUSING LSOA INEQUALITY AND NO FAIR SHARE ###
+########################################################
+######################### RISK ########################
+########################################################
+b7 <- lm(no_fair_share ~ risk*lsoa_meanrank + risk*lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b7
+b7_cl <- cluster_errors(b7, binc$local_authority)
+b7_vcv<- multiwayvcov::cluster.vcov(model = b7, cluster = data.frame(binc$local_authority))
+
+b7_numsa <- interaction_plot_continuous2(b7, effect = "riskLow", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "riskLow:lsoa_meanrank", 
+                             varcov = b7_vcv)
+b7_numsb <- interaction_plot_continuous2(b7, effect = "riskHigh", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "riskHigh:lsoa_meanrank", 
+                             varcov = b7_vcv)
+
+b7_df <- data.frame(rbind(b7_numsa, b7_numsb))
+b7_df$Risk <- c(rep("Low risk", nrow(b7_numsa)), rep("High risk", nrow(b7_numsb)))
+
+b7_plot <- ggplot(b7_df, aes(x, y, fill = Risk)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Risk, linetype = Risk)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for risk") +
+  xlab("LSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .15)) +
+  ggtitle("Marginal effects of risk on  \n perceptions of unfairness");b7_plot
+  
+
+texreg(b7, 
+       override.se = b7_cl[,2],
+       override.pvalues = b7_cl[,4])
+
+
+b7a <- lm(no_fair_share ~ risk + lsoa_meanrank + lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b7a_cl <- cluster_errors(b7a, binc$local_authority)
+b7a_vcv<- multiwayvcov::cluster.vcov(model = b7a, cluster = data.frame(binc$local_authority))
+```
+
+```{r }
+########################################################
+### AFTER HOUSING LSOA INEQUALITY AND REDISTRIBUTION ###
+########################################################
+######################### RISK ########################
+########################################################
+b8 <- lm(redistribution ~ risk*lsoa_meanrank + risk*lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+
+b8_cl <- cluster_errors(b6, binc$local_authority)
+b8_vcv<- multiwayvcov::cluster.vcov(model = b8, cluster = data.frame(binc$local_authority))
+
+b8_numsa <- interaction_plot_continuous2(b8, effect = "riskLow", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "riskLow:lsoa_meanrank", 
+                             varcov = b8_vcv)
+b8_numsb <- interaction_plot_continuous2(b8, effect = "riskHigh", 
+                             moderator = "lsoa_meanrank",
+                             interaction = "riskHigh:lsoa_meanrank", 
+                             varcov = b8_vcv)
+
+b8_df <- data.frame(rbind(b8_numsa, b8_numsb))
+b8_df$Risk <- c(rep("Low risk", nrow(b8_numsa)), rep("High risk", nrow(b8_numsb)))
+
+b8_plot <- ggplot(b8_df, aes(x, y, fill = Risk)) +
+  geom_ribbon(aes(ymin = lower_bound, ymax = upper_bound), alpha = 0.4) +
+  scale_fill_manual(values = c("gray71", "gray34")) +
+  geom_line(aes(color = Risk, linetype = Risk)) +
+  scale_color_manual(values = c("black", "black")) +
+  scale_linetype_manual(values = c("dashed", "solid")) +
+  ylim(-0.15, 0.15) +
+  theme_linedraw() + 
+  geom_hline(yintercept = 0, size = 0.6, linetype = "dotted", alpha = 0.7) +
+  ylab("Estimated coefficient for risk") +
+  xlab("LSOA inequality (low to high)") +
+  theme(strip.background = element_rect(fill = "white"),
+        legend.background = element_rect(color = "black", size = 0.5, linetype = "solid"),
+        legend.key.width=unit(1,"cm"),legend.key.height=unit(0.3,"cm"),
+        legend.position = c(0.7, .15)) +
+  ggtitle("Marginal effects of risk on  \n redistributive preferences");b8_plot
+
+
+texreg(b8, 
+       override.se = b8_cl[,2],
+       override.pvalues = b8_cl[,4])
+
+
+b8a <- lm(redistribution ~ risk + lsoa_meanrank + lsoa_mean +
+           education +  routine + age + I(age^2) + pid + lr + 
+           attention + gender + pctwhite + 
+           density, weight = weight_core, data = binc)
+b8a_cl <- cluster_errors(b8a, binc$local_authority)
+b8a_vcv<- multiwayvcov::cluster.vcov(model = b8a, cluster = data.frame(binc$local_authority))
+```
+
+```{r}
+texreg(list(b5a, b5, b6a, b6, b7a, b7, b8a, b8), 
+       override.se = list(b5a_cl[,2], b5_cl[,2], 
+                          b6a_cl[,2], b6_cl[,2],
+                          b7a_cl[,2], b7_cl[,2],
+                          b8a_cl[,2], b8_cl[,2]),
+       override.pvalues = list(b5a_cl[,4], b5_cl[,4], 
+                          b6a_cl[,4], b6_cl[,4],
+                          b7a_cl[,4], b7_cl[,4],
+                          b8a_cl[,4], b8_cl[,4]))
+```
+
+## COMBINE INTERACTIONS PLOTS FOR FIGURES
+
+```{r}
+b1to2 <- grid.arrange(b1_plot, b2_plot, ncol = 2)
+ggsave("b1to2.png", b1to2, height = 4, width = 8)
+b3to4 <- grid.arrange(b3_plot, b4_plot, ncol = 2)
+ggsave("b3to4.png", b3to4, height = 4, width = 8)
+b5to6 <- grid.arrange(b5_plot, b6_plot, ncol = 2)
+ggsave("b5to6.png", b5to6, height = 4, width = 8)
+b7to8 <- grid.arrange(b7_plot, b8_plot, ncol = 2)
+ggsave("b7to8.png", b7to8, height = 4, width = 8)
+```
+
+
+
+
+
+
+
